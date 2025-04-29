@@ -1,46 +1,37 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Button,
-  Image,
-  StyleSheet,
-  Alert,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  TextInput,
-} from 'react-native';
+import { View, Text } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 
-const Explore = () => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
+type VisionData = {
+  _id: string;
+  imageBase64: string;
+  textAnnotations: string[];
+  restaurantName: string[];
+  timestamp: string;
+};
 
-  useEffect(() => {
-    // Replace with your API URL
-    const fetchData = async () => {
-      try {
-        const response = await fetch('http://192.168.1.101:3000/data');
-        const result = await response.json();
-        setData(result);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+const fetchMenus = async (): Promise<VisionData[]> => {
+  const res = await fetch('http://192.168.1.101:3000/menus');
+  if (!res.ok) throw new Error('Network response was not ok');
+  return res.json();
+};
 
-    fetchData();
-  }, []);
+export default function Explore() {
+  const { data: menus, isLoading, error } = useQuery({
+    queryKey: ['menus'],
+    queryFn: fetchMenus,
+  });
 
-  if (loading) return <Text>Loading...</Text>;
+  if (isLoading) return <Text>Loading...</Text>;
+  if (error) return <Text>Error loading menus</Text>;
 
   return (
     <View>
-      {data.map((item) => (
-        <Text key={item.id}>{item.name}</Text>
+      {menus?.map((item) => (
+        <View key={item._id}>
+          <Text>{item.restaurantName?.[0] ?? 'Unnamed Restaurant'}</Text>
+          <Text>{item.textAnnotations?.[0] ?? 'No text detected'}</Text>
+        </View>
       ))}
     </View>
   );
-};
-
-export default Explore;
+}

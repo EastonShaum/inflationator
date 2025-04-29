@@ -26,6 +26,7 @@ app.use(bodyParser.json({ limit: '10mb' }));
 const visionDataSchema = new mongoose.Schema({
   imageBase64: String,
   textAnnotations: [String],
+  restaurantName: [String],
   timestamp: { type: Date, default: Date.now },
 });
 
@@ -49,6 +50,7 @@ app.post('/upload', async (req, res) => {
     const visionData = new VisionData({
       imageBase64,
       textAnnotations,
+      restaurantName,
     });
 
     await visionData.save();
@@ -61,8 +63,16 @@ app.post('/upload', async (req, res) => {
   }
 });
 
-//call to get the data from the DB
-//app.get('/data')
+// Endpoint to get all stored Vision data
+app.get('/menus', async (req, res) => {
+  try {
+    const data = await VisionData.find(); // Fetch all documents from VisionData collection
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    res.status(500).send('Error fetching data from MongoDB.');
+  }
+});
 
 // Start the server
 app.listen(port, () => {
