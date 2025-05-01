@@ -15,8 +15,10 @@ import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import Geocoder from 'react-native-geocoding';
 
+//import { GOOGLE_GEOCODER_API } from '@env';
+
 // Geocoding API Key Setup (replace with your actual key)
-Geocoder.init('YOUR_GOOGLE_API_KEY');
+//Geocoder.init(GOOGLE_GEOCODER_API);
 
 const RESTAURANTS = [
   "McDonald's",
@@ -139,7 +141,7 @@ export default function UploadScreen() {
         },
         body: JSON.stringify({
           imageBase64: base64Data,
-          location: selectedLocation,
+          restaurantName: selectedLocation, 
         }),
       });
 
