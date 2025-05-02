@@ -15,10 +15,10 @@ import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import Geocoder from 'react-native-geocoding';
 
-//import { GOOGLE_GEOCODER_API } from '@env';
+import { Keyboard, TouchableWithoutFeedback } from 'react-native';
 
-// Geocoding API Key Setup (replace with your actual key)
-//Geocoder.init(GOOGLE_GEOCODER_API);
+// Geocoding API Key Setup 
+Geocoder.init(process.env.EXPO_PUBLIC_GOOGLE_GEOCODER_API!);
 
 const RESTAURANTS = [
   "McDonald's",
@@ -110,9 +110,61 @@ export default function UploadScreen() {
         latitudeDelta: 0.0922,
         longitudeDelta: 0.0421,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(error);
+
+      if (typeof error === 'object' && error !== null && 'code' in error) {
+        const err = error as { code: number };
+        if (err.code === 4) {
+          Alert.alert('Error', 'Please add more to your search');
+          return;
+        }
+      }
+
       Alert.alert('Error', 'Unable to find the location');
+    }
+  };
+
+  const handleMapPress = async (event: any) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    setLocation({ latitude, longitude });
+    setMapRegion({
+      latitude,
+      longitude,
+      latitudeDelta: 0.0922,
+      longitudeDelta: 0.0421,
+    });
+
+    try {
+      const res = await Geocoder.from({ lat: latitude, lng: longitude });
+      const components = res.results[0]?.address_components || [];
+      
+      console.log(res.results)
+      getBusinessName(latitude, longitude);
+    } catch (error) {
+      console.error('Reverse geocoding failed', error);
+      setSelectedLocation('Unknown business');
+    }
+  };
+
+  const getBusinessName = async (lat, lng) => {
+    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API;  // Add your Places API key
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=500&type=restaurant&key=${apiKey}`;
+    
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.results.length > 0) {
+        console.log(data.results);
+        const businessName = data.results[0].name; // Take the first result's name
+        setSelectedLocation(businessName);  // Use it to set the selected location
+      } else {
+        Alert.alert('No business found', 'No business found in this area');
+      }
+    } catch (error) {
+      console.error('Error fetching business name:', error);
+      Alert.alert('Error', 'Unable to fetch business details');
     }
   };
 
@@ -141,7 +193,7 @@ export default function UploadScreen() {
         },
         body: JSON.stringify({
           imageBase64: base64Data,
-          restaurantName: selectedLocation, 
+          restaurantName: selectedLocation,
         }),
       });
 
@@ -184,62 +236,91 @@ export default function UploadScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      {!selectedLocation ? (
-        <>
-          <Text style={styles.heading}>Select Your Restaurant</Text>
-          <FlatList
-            data={RESTAURANTS}
-            renderItem={renderRestaurant}
-            keyExtractor={(item) => item}
-          />
-        </>
-      ) : (
-        <>
-          <Text style={styles.subheading}>Restaurant: {selectedLocation}</Text>
-          <View style={styles.buttonGroup}>
-            <Text style={styles.title}>Make sure the full menu is included in the photo for better accuracy</Text>
-            <Button title="📷 Take Photo" onPress={takePhoto} />
-            <Button title="🖼️ Pick from Gallery" onPress={pickImageFromGallery} />
-          </View>
-          {image && (
-            <>
-              <Image source={{ uri: image }} style={styles.preview} />
-              <Button title="Upload Image" onPress={uploadImage} />
-              <TouchableOpacity onPress={() => setSelectedLocation(null)}>
-                <Text style={styles.changeLocation}>Change Restaurant</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          {ocrResults.length > 0 && (
-            <View style={styles.ocrResults}>
-              <Text style={styles.ocrHeading}>OCR Results:</Text>
-              {ocrResults.map((result, index) => (
-                <Text key={index} style={styles.ocrText}>
-                  {result.description}
-                </Text>
-              ))}
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={styles.container}>
+        {!selectedLocation ? (
+          <>
+            <Text style={styles.heading}>Select Your Restaurant</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.subheading}>Restaurant: {selectedLocation}</Text>
+            <View style={styles.buttonGroup}>
+              <Text style={styles.title}>Make sure the full menu is included in the photo for better accuracy</Text>
+              <Button title="📷 Take Photo" onPress={takePhoto} />
+              <Button title="🖼️ Pick from Gallery" onPress={pickImageFromGallery} />
             </View>
-          )}
-        </>
-      )}
+            {image && (
+              <>
+                <Image source={{ uri: image }} style={styles.preview} />
+                <Button title="Upload Image" onPress={uploadImage} />
+                <TouchableOpacity onPress={() => setSelectedLocation(null)}>
+                  <Text style={styles.changeLocation}>Change Restaurant</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {ocrResults.length > 0 && (
+              <View style={styles.ocrResults}>
+                <Text style={styles.ocrHeading}>OCR Results:</Text>
+                {ocrResults.map((result, index) => (
+                  <Text key={index} style={styles.ocrText}>
+                    {result.description}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </>
+        )}
 
-      <View style={styles.searchContainer}>
-        <TextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search for a location"
-          style={styles.searchInput}
-        />
-        <Button title="Search Location" onPress={() => searchLocation(searchQuery)} />
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputWrapper}>
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search for a location"
+              style={styles.searchInput}
+              returnKeyType="search"
+              onSubmitEditing={() => {
+                Keyboard.dismiss();
+                searchLocation(searchQuery);
+              }}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                <Text style={styles.clearButtonText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <Button
+            title="Search Location"
+            onPress={() => {
+              Keyboard.dismiss();
+              searchLocation(searchQuery);
+            }}
+          />
+        </View>
+
+        {mapRegion && (
+          <>
+            <MapView
+              style={{ flex: 1 }}
+              region={mapRegion}
+              onPress={handleMapPress}
+              onRegionChangeComplete={setMapRegion}
+            >
+              {location && <Marker coordinate={location} title="Selected Location" />}
+            </MapView>
+            {selectedLocation && !selectedLocation && (
+              <View style={{ marginVertical: 10 }}>
+                <Text style={{ textAlign: 'center' }}>{selectedLocation}</Text>
+                <Button title="Confirm This Location" onPress={() => setSelectedLocation(selectedLocation)} />
+              </View>
+            )}
+          </>
+        )}
+
       </View>
-
-      {mapRegion && (
-        <MapView style={{ flex: 1 }} region={mapRegion} onRegionChangeComplete={setMapRegion}>
-          {location && <Marker coordinate={location} title="Your location" />}
-        </MapView>
-      )}
-    </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -292,5 +373,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     marginBottom: 10,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 10,
+    paddingRight: 10,
+  },
+  clearButton: {
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    fontSize: 16,
+    color: '#888',
   },
 });
